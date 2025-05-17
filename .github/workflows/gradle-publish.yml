@@ -1,0 +1,72 @@
+name: Gradle Semantic Release Jar
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      # 1. Клонування репозиторію
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Встановлення JDK
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 3. Semantic Versioning (на основі комітів)
+      - name: Determine Version
+        id: version
+        uses: PaulHatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: v
+          major_pattern: /BREAKING CHANGE|feat!/
+          minor_pattern: /feat:/
+          default_version: '0.1.0'
+          search_commit_body: true
+          bump_version: true
+
+      # 4. Дати дозвіл на виконання gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # 5. Збірка Gradle
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      # 6. Перейменування JAR
+      - name: Rename jar
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          JAR_PATH=$(find build/libs -name "*.jar" | head -n 1)
+          cp "$JAR_PATH" "TrustPlugin_V${VERSION}.jar"
+        shell: bash
+
+      # 7. Створення тега вручну
+      - name: Create Git Tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 8. Створення GitHub релізу
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          files: TrustPlugin_V${{ steps.version.outputs.version }}.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
