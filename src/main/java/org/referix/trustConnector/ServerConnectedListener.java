@@ -9,6 +9,7 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import org.slf4j.Logger;
 
+import java.sql.SQLException;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -18,15 +19,17 @@ public class ServerConnectedListener {
     private final TrustConnector plugin;
     private final Logger logger;
     private final ProxyServer server;
+    private DatabaseManager databaseManager;
 
-    public ServerConnectedListener(TrustConnector plugin, Logger logger, ProxyServer server1) {
+    public ServerConnectedListener(TrustConnector plugin, Logger logger, ProxyServer server1, DatabaseManager databaseManager) {
         this.plugin = plugin;
         this.logger = logger;
         this.server = server1;
+        this.databaseManager = databaseManager;
     }
 
     @Subscribe
-    public void onServerConnected(ServerConnectedEvent event) {
+    public void onServerConnected(ServerConnectedEvent event) throws SQLException {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
 
@@ -51,5 +54,7 @@ public class ServerConnectedListener {
         }).delay(1, TimeUnit.SECONDS).schedule();
 
         logger.info("Sent plugin message to server {} for player {}: {}", server.getServerInfo().getName(), player.getUsername(), command);
+        plugin.removePendingCommand(uuid);
+        databaseManager.deleteCommand(uuid);
     }
 }
