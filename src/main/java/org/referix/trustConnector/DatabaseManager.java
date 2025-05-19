@@ -1,8 +1,8 @@
 package org.referix.trustConnector;
 
-
 import java.io.File;
 import java.sql.*;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -39,37 +39,47 @@ public class DatabaseManager {
 
     private void createTable() throws SQLException {
         String sql = "CREATE TABLE IF NOT EXISTS commands (" +
-                "uuid TEXT PRIMARY KEY," +
-                "command TEXT NOT NULL)";
+                " id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "category TEXT NOT NULL, " +
+                "uuid TEXT NOT NULL, " +
+                "command TEXT NOT NULL) ";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.executeUpdate();
         }
     }
 
-    public void loadCommands(Map<UUID, String> map) throws SQLException {
-        String sql = "SELECT uuid, command FROM commands";
+    public void loadCommands(Map<String, Map<UUID, String>> map) throws SQLException {
+        String sql = "SELECT category, uuid, command FROM commands";
         try (PreparedStatement stmt = connection.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) {
+                String category = rs.getString("category");
                 UUID uuid = UUID.fromString(rs.getString("uuid"));
                 String command = rs.getString("command");
-                map.put(uuid, command);
+
+                map.computeIfAbsent(category, k -> new HashMap<>()).put(uuid, command);
             }
         }
     }
 
-    public void saveCommands(Map<UUID, String> map) throws SQLException {
+    public void saveCommands(Map<String, Map<UUID, String>> map) throws SQLException {
         String deleteSql = "DELETE FROM commands";
-        String insertSql = "INSERT INTO commands (uuid, command) VALUES (?, ?)";
+        String insertSql = "INSERT INTO commands (category, uuid, command) VALUES (?, ?, ?)";
         try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql);
              PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
             connection.setAutoCommit(false);
             deleteStmt.executeUpdate();
-            for (Map.Entry<UUID, String> entry : map.entrySet()) {
-                insertStmt.setString(1, entry.getKey().toString());
-                insertStmt.setString(2, entry.getValue());
-                insertStmt.addBatch();
+
+            for (Map.Entry<String, Map<UUID, String>> categoryEntry : map.entrySet()) {
+                String category = categoryEntry.getKey();
+                for (Map.Entry<UUID, String> entry : categoryEntry.getValue().entrySet()) {
+                    insertStmt.setString(1, category);
+                    insertStmt.setString(2, entry.getKey().toString());
+                    insertStmt.setString(3, entry.getValue());
+                    insertStmt.addBatch();
+                }
             }
+
             insertStmt.executeBatch();
             connection.commit();
             connection.setAutoCommit(true);
@@ -79,13 +89,12 @@ public class DatabaseManager {
         }
     }
 
-    public void deleteCommand(UUID uuid) throws SQLException {
-        String sql = "DELETE FROM commands WHERE uuid = ?";
+    public void deleteCommand(String category, UUID uuid) throws SQLException {
+        String sql = "DELETE FROM commands WHERE category = ? AND uuid = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, uuid.toString());
+            stmt.setString(1, category);
+            stmt.setString(2, uuid.toString());
             stmt.executeUpdate();
         }
     }
-
 }
-
