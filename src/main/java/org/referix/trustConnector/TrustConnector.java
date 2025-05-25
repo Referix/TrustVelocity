@@ -8,6 +8,7 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.messages.ChannelIdentifier;
 import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import org.slf4j.Logger;
 import com.google.inject.Inject;
@@ -19,7 +20,7 @@ import java.util.*;
 public class TrustConnector {
 
     public static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("trust:reputation");
-
+    private static final MinecraftChannelIdentifier CACHE_CHANNEL = MinecraftChannelIdentifier.from("trust:cache");
     @Inject private Logger logger;
     @Inject private ProxyServer server;
 
@@ -67,6 +68,7 @@ public class TrustConnector {
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
         server.getChannelRegistrar().register(CHANNEL);
+        server.getChannelRegistrar().register(CACHE_CHANNEL);  // Реєструємо канал кешу
 
         databaseManager = new DatabaseManager(new File("plugins/trustconnector"));
         try {
@@ -93,20 +95,30 @@ public class TrustConnector {
 
     @Subscribe
     public void onPluginMessage(PluginMessageEvent event) {
-        if (!event.getIdentifier().equals(CHANNEL)) return;
+        ChannelIdentifier channel = event.getIdentifier();
 
-        ByteArrayDataInput in = ByteStreams.newDataInput(event.getData());
-        try {
-            String category = in.readUTF();
-            String uuidString = in.readUTF();
-            String commandTemplate = in.readUTF();
+        if (channel.equals(CHANNEL)) {
+            // Логіка для trust:reputation (команди)
+            ByteArrayDataInput in = ByteStreams.newDataInput(event.getData());
+            try {
+                String category = in.readUTF();
+                String uuidString = in.readUTF();
+                String commandTemplate = in.readUTF();
 
-            UUID uuid = UUID.fromString(uuidString);
-            addCommand(category, uuid, commandTemplate);
+                UUID uuid = UUID.fromString(uuidString);
+                addCommand(category, uuid, commandTemplate);
 
-            logger.info("Received command for category '{}', UUID {}: {}", category, uuid, commandTemplate);
-        } catch (Exception e) {
-            logger.warn("Invalid plugin message format", e);
+                logger.info("Received command for category '{}', UUID {}: {}", category, uuid, commandTemplate);
+            } catch (Exception e) {
+                logger.warn("Invalid plugin message format", e);
+            }
+        } else if (channel.equals(CACHE_CHANNEL)) {
+            // Обробка кеш-повідомлень trust:cache — ретрансляція всім серверам
+            byte[] data = event.getData();
+            for (var targetServer : server.getAllServers()) {
+                targetServer.sendPluginMessage(CACHE_CHANNEL, data);
+            }
+            logger.info("Redistributed cache message to all servers.");
         }
     }
 
