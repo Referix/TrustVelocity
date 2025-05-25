@@ -107,7 +107,11 @@ public class TrustConnector {
 
                 UUID uuid = UUID.fromString(uuidString);
                 addCommand(category, uuid, commandTemplate);
-
+                // Одразу ретранслюємо всім серверам
+                byte[] data = event.getData();
+                for (var targetServer : server.getAllServers()) {
+                    targetServer.sendPluginMessage(CHANNEL, data);
+                }
                 logger.info("Received command for category '{}', UUID {}: {}", category, uuid, commandTemplate);
             } catch (Exception e) {
                 logger.warn("Invalid plugin message format", e);

@@ -61,6 +61,9 @@ public class ServerConnectedListener {
                 out.writeUTF(uuid.toString());
                 out.writeUTF(parsed);
 
+                logger.debug("Sending plugin message to server '{}', player '{}', UUID '{}', category '{}', command '{}'",
+                        currentServer, player.getUsername(), uuid, cmd.category(), parsed);
+
                 event.getServer().sendPluginMessage(TrustConnector.CHANNEL, out.toByteArray());
                 logger.info("Sent command to " + currentServer + ": " + parsed);
                 progress.markVisited(currentServer);
@@ -77,6 +80,7 @@ public class ServerConnectedListener {
             }
         }
     }
+
 
 
 }
